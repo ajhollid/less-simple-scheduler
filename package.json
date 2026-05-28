@@ -1,6 +1,6 @@
 {
   "name": "less-simple-scheduler",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "MongoDB-backed, horizontally scalable job scheduler for Node.js. Long-running jobs don't block scheduling.",
   "type": "module",
   "main": "./dist/index.js",
