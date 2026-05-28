@@ -1,0 +1,60 @@
+{
+  "name": "less-simple-scheduler",
+  "version": "2.0.0",
+  "description": "MongoDB-backed, horizontally scalable job scheduler for Node.js. Long-running jobs don't block scheduling.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build",
+    "dev": "nodemon --watch src --ext ts --exec tsx index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "scheduler",
+    "job-scheduler",
+    "mongodb",
+    "task-queue",
+    "uptime-monitoring",
+    "distributed",
+    "cron"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajhollid/less-simple-scheduler.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "nodemon": "3.1.14",
+    "ts-node": "10.9.2",
+    "tsx": "4.22.3",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "mongodb": "7.2.0"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "bugs": {
+    "url": "https://github.com/ajhollid/less-simple-scheduler/issues"
+  },
+  "homepage": "https://github.com/ajhollid/less-simple-scheduler#readme"
+}
