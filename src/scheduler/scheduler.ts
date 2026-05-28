@@ -48,31 +48,30 @@ export class Scheduler extends EventEmitter implements IScheduler {
   ) => this;
 
   public readonly workerId: string;
-
+  private readonly templates: Map<string, Template> = new Map<
+    string,
+    Template
+  >();
+  private connected: boolean = false;
+  private started: boolean = false;
+  private processJobIntervalId: NodeJS.Timeout | null = null;
+  private lockMs: number;
+  private heartbeatId: NodeJS.Timeout | null = null;
+  private processEvery: number;
+  private concurrency: number;
+  private inFlightJobs: Map<JobId, InFlightEntry>;
+  private drainTimeoutMs: number;
   constructor(
     private store: IStore,
-    private readonly templates: Map<string, Template> = new Map<
-      string,
-      Template
-    >(),
-    private options: SchedulerOptions,
-    private connected: boolean = false,
-    private started: boolean = false,
-    private lockMs: number = options.lockMs ?? DEFAULTS.lockMs,
-    private processJobIntervalId: NodeJS.Timeout | null = null,
-    private heartbeatId: NodeJS.Timeout | null = null,
-    private processEvery: number = options.processEvery ??
-      DEFAULTS.processEvery,
-    private concurrency: number = options.concurrency ?? DEFAULTS.concurrency,
-    private inFlightJobs: Map<JobId, InFlightEntry> = new Map<
-      JobId,
-      InFlightEntry
-    >(),
-    private drainTimeoutMs: number = options.drainTimeoutMs ??
-      DEFAULTS.drainTimeoutMs,
+    options: SchedulerOptions,
   ) {
     super();
     this.workerId = `${hostname()}:${process.pid}:${randomUUID()}`;
+    this.lockMs = options.lockMs ?? DEFAULTS.lockMs;
+    this.processEvery = options.processEvery ?? DEFAULTS.processEvery;
+    this.concurrency = options.concurrency ?? DEFAULTS.concurrency;
+    this.inFlightJobs = new Map<JobId, InFlightEntry>();
+    this.drainTimeoutMs = options.drainTimeoutMs ?? DEFAULTS.drainTimeoutMs;
   }
 
   private emitSchedulerError(err: unknown): void {

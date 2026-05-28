@@ -1,6 +1,9 @@
 {
-  "name": "less-simple-scheduler",
+  "name": "@popnfresh234/less-simple-scheduler",
   "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "MongoDB-backed, horizontally scalable job scheduler for Node.js. Long-running jobs don't block scheduling.",
   "type": "module",
   "main": "./dist/index.js",
