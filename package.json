@@ -1,5 +1,5 @@
 {
-  "name": "@popnfresh234/less-simple-scheduler",
+  "name": "less-simple-scheduler",
   "version": "2.2.0",
   "publishConfig": {
     "access": "public"
