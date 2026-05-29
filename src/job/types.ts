@@ -14,7 +14,7 @@ export interface IJob {
 
   // Scheduler-managed schedule state
   nextRunAt: number;
-  lastRunAt: number | null; // last completion time (set on release)
+  lastFinishedAt: number | null; // last completion time (set on release)
   lastScheduledAt: number;
   lastResult: JobResult | null;
   lastError: string | null;

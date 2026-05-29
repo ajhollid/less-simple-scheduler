@@ -223,7 +223,7 @@ export class MongoStore implements IStore {
           $set: {
             nextRunAt: next,
             lastScheduledAt: next,
-            lastRunAt: now,
+            lastFinishedAt: now,
             lastResult: "ok",
             lastError: null,
             attempts: 0,

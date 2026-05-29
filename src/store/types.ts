@@ -36,7 +36,7 @@ export interface IStore {
   heartbeat(id: JobId, workerId: string, lockMs: number): Promise<boolean>;
 
   /**
-   * Apply post-run patch (e.g. `nextRunAt`, `lastRunAt`, `attempts`,
+   * Apply post-run patch (e.g. `nextRunAt`, `lastFinishedAt`, `attempts`,
    * `lastResult`, `lastError`) AND clear the lock, in a single atomic
    * write. Only succeeds if `lockedBy` still equals `workerId`.
    */

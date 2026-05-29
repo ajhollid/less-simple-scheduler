@@ -247,7 +247,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
       const released = await this.store.releaseLock(job.id, this.workerId, {
         lastResult: "error",
         lastError: error.message,
-        lastRunAt: now,
+        lastFinishedAt: now,
         lastFailedAt: now,
         failCount: (job.failCount ?? 0) + 1,
       });
@@ -297,7 +297,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
       // ***********************************************
       const patch: Partial<IJob> = {
         active: false,
-        lastRunAt: now,
+        lastFinishedAt: now,
         lastResult: "ok",
         lastError: null,
         attempts: 0,
@@ -328,7 +328,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
             attempts: attempt,
             lastResult: "error",
             lastError: message,
-            lastRunAt: now,
+            lastFinishedAt: now,
             lastFailedAt: now,
             failCount,
           }
@@ -337,7 +337,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
             nextRunAt: now + backoff,
             lastResult: "error",
             lastError: message,
-            lastRunAt: now,
+            lastFinishedAt: now,
             lastFailedAt: now,
             failCount,
           };
@@ -434,7 +434,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
       active: input.active ?? true,
 
       nextRunAt: startAt,
-      lastRunAt: null,
+      lastFinishedAt: null,
       lastScheduledAt: startAt,
       lastResult: null,
       lastError: null,
@@ -462,7 +462,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
     if (input.upsert) {
       const setOnInsert: Partial<IJob> = {
         nextRunAt: job.nextRunAt,
-        lastRunAt: job.lastRunAt,
+        lastFinishedAt: job.lastFinishedAt,
         lastScheduledAt: job.lastScheduledAt,
         lastResult: job.lastResult,
         lastError: job.lastError,
