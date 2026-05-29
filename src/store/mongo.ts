@@ -38,6 +38,16 @@ const omitUndefined = <T extends object>(obj: T): Partial<T> => {
   return out;
 };
 
+// ***********************************************
+// The lock-clearing half of every release. Defined once so all release
+// paths (releaseLock, releaseRecurring) free the lock identically.
+// ***********************************************
+const LOCK_CLEARED = {
+  lockedBy: null,
+  lockedUntil: null,
+  lockedAt: null,
+} as const;
+
 export class MongoStore implements IStore {
   private readonly client: MongoClient;
   private readonly collectionName: string;
@@ -188,13 +198,43 @@ export class MongoStore implements IStore {
       {
         $set: {
           ...stripId(patch),
-          lockedBy: null,
-          lockedUntil: null,
-          lockedAt: null,
+          ...LOCK_CLEARED,
           updatedAt: Date.now(),
         },
       },
     );
     return result.matchedCount === 1;
+  }
+
+  async releaseRecurring(
+    id: JobId,
+    workerId: string,
+    now: number,
+  ): Promise<IJob | null> {
+    // Like releaseLock, but for a recurring success: advances the
+    // schedule AND clears the lock in one atomic write.
+    // `nextRunAt`/`lastScheduledAt` are advanced by the job's current `repeat`
+    // which may have been changed while the job was in flight
+    const next = { $max: [{ $add: ["$lastScheduledAt", "$repeat"] }, now + 1] };
+    const doc = await this.requireCollection().findOneAndUpdate(
+      { _id: id, lockedBy: workerId },
+      [
+        {
+          $set: {
+            nextRunAt: next,
+            lastScheduledAt: next,
+            lastRunAt: now,
+            lastResult: "ok",
+            lastError: null,
+            attempts: 0,
+            runCount: { $add: [{ $ifNull: ["$runCount", 0] }, 1] },
+            ...LOCK_CLEARED,
+            updatedAt: now,
+          },
+        },
+      ],
+      { returnDocument: "after" },
+    );
+    return doc ? fromMongo(doc) : null;
   }
 }

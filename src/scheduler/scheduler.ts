@@ -274,52 +274,44 @@ export class Scheduler extends EventEmitter implements IScheduler {
       if (entry.lostLock) return;
 
       // ***********************************************
-      // 3b.  Build patch to release lock and update job
+      // 3b.  Recurring jobs: advance the schedule atomically in the
+      //      store so the next run honours the job's *live* repeat
       // ***********************************************
       const now = Date.now();
-      const isRecurring = job.repeat > 0;
-      const nextScheduled = job.lastScheduledAt + job.repeat;
-      const next = Math.max(nextScheduled, now + 1);
-      const runCount = (job.runCount ?? 0) + 1;
-      const patch: Partial<IJob> = isRecurring
-        ? {
-            nextRunAt: next,
-            lastScheduledAt: next,
-            lastRunAt: now,
-            lastResult: "ok",
-            lastError: null,
-            attempts: 0,
-            runCount,
-          }
-        : {
-            active: false,
-            lastRunAt: now,
-            lastResult: "ok",
-            lastError: null,
-            attempts: 0,
-            runCount,
-          };
+      if (job.repeat > 0) {
+        const updated = await this.store.releaseRecurring(
+          job.id,
+          this.workerId,
+          now,
+        );
+        if (!updated) {
+          this.emit("job:abort", this.workerId, job, "lock lost");
+          return;
+        }
+        this.emit("job:complete", this.workerId, updated);
+        return;
+      }
 
       // ***********************************************
-      // 3c.  Attempt to release lock
+      // 3c.  One-shot jobs: deactivate and release the lock.
       // ***********************************************
+      const patch: Partial<IJob> = {
+        active: false,
+        lastRunAt: now,
+        lastResult: "ok",
+        lastError: null,
+        attempts: 0,
+        runCount: (job.runCount ?? 0) + 1,
+      };
       const released = await this.store.releaseLock(
         job.id,
         this.workerId,
         patch,
       );
-
-      // ***********************************************
-      // 3d.  If we couldn't release the job, emit error
-      // ***********************************************
       if (!released) {
         this.emit("job:abort", this.workerId, job, "lock lost");
         return;
       }
-
-      // ***********************************************
-      // 3e.  Job done, lock released, emit complete
-      // ***********************************************
       this.emit("job:complete", this.workerId, { ...job, ...patch });
     } catch (error: unknown) {
       if (entry.lostLock) return;

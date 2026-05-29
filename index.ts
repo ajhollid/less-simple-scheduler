@@ -23,7 +23,7 @@ const COLLECTION = "jobs";
 // ***********************************************
 function makeScheduler(tag: string, processEvery: number): Scheduler {
   const store = new MongoStore({ url: MONGO_URL, collection: COLLECTION });
-  const scheduler = new Scheduler(store, new Map(), {
+  const scheduler = new Scheduler(store, {
     concurrency: 5,
     processEvery,
     lockMs: 10_000,

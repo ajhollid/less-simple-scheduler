@@ -45,4 +45,18 @@ export interface IStore {
     workerId: string,
     patch: Partial<IJob>,
   ): Promise<boolean>;
+
+  /**
+   * The recurring-success counterpart to `releaseLock`: advances the
+   * schedule AND clears the lock in a single atomic write.
+   * `nextRunAt`/`lastScheduledAt` are advanced by the job's current
+   * `repeat`, so a `repeat` change applied mid-flight takes effect on this same cycle.
+   * Only succeeds if `lockedBy` still equals `workerId`.
+   * Returns the updated job, or null if the lock has been lost.
+   */
+  releaseRecurring(
+    id: JobId,
+    workerId: string,
+    now: number,
+  ): Promise<IJob | null>;
 }
