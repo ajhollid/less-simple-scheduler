@@ -152,6 +152,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
       Math.floor(this.lockMs / 3), // heartbeat at least 3 times during the lock duration
     );
     this.heartbeatId = setInterval(() => {
+      this.emit("scheduler:tick", this.workerId);
       this.heartbeatTick().catch((err) => this.emitSchedulerError(err));
     }, heartbeatEvery);
 
