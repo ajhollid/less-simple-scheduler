@@ -92,7 +92,7 @@ export interface SchedulerEvents {
   "scheduler:stop": (workerId: string) => void;
   "scheduler:drain": (workerId: string, count: number) => void;
   "scheduler:error": (workerId: string, error: Error) => void;
-  "scheduler:tick": (workerId: string) => void;
+  "scheduler:heartbeat": (workerId: string) => void;
 
   // Job lifecycle
   "job:locked": (workerId: string, job: IJob) => void;
