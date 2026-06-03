@@ -5,6 +5,7 @@ export type {
   IScheduler,
   SchedulerOptions,
   SchedulerEvents,
+  AddJobInput,
 } from "./scheduler/types.js";
-export type { IStore } from "./store/types.js";
+export type { IStore, ListOptions } from "./store/types.js";
 export type { IJob, JobId, JobResult } from "./job/types.js";

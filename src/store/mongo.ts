@@ -7,7 +7,7 @@ import {
 } from "mongodb";
 import type { IJob, JobId } from "../job/types.js";
 import type { BulkOp, BulkWriteResult, IStore } from "./types.js";
-
+import type { ListOptions } from "./types.js";
 export interface MongoStoreOptions {
   // ***********************************************
   // url is full connection string including DB name
@@ -182,9 +182,18 @@ export class MongoStore implements IStore {
     return doc ? fromMongo(doc) : null;
   }
 
-  async list(): Promise<IJob[]> {
-    const docs = await this.requireCollection().find().toArray();
+  async list(options?: ListOptions): Promise<IJob[]> {
+    const docs = await this.requireCollection()
+      .find(
+        {},
+        { sort: { _id: 1 }, skip: options?.skip, limit: options?.limit },
+      )
+      .toArray();
     return docs.map(fromMongo);
+  }
+
+  async count(): Promise<number> {
+    return await this.requireCollection().countDocuments();
   }
 
   async update(id: JobId, updates: Partial<IJob>): Promise<IJob | null> {

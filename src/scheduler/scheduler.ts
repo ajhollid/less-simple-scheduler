@@ -1,7 +1,7 @@
 import { EventEmitter } from "events";
 import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
-
+import type { ListOptions } from "../store/types.js";
 import type {
   AddJobInput,
   IScheduler,
@@ -546,8 +546,12 @@ export class Scheduler extends EventEmitter implements IScheduler {
     return await this.store.get(id);
   }
 
-  async getJobs(): Promise<IJob[]> {
-    return await this.store.list();
+  async getJobs(options?: ListOptions): Promise<IJob[]> {
+    return await this.store.list(options);
+  }
+
+  async countJobs(): Promise<number> {
+    return await this.store.count();
   }
 
   async removeJob(id: JobId): Promise<boolean> {

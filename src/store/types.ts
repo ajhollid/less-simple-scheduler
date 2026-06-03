@@ -1,5 +1,10 @@
 import type { IJob, JobId } from "../job/types.js";
 
+export interface ListOptions {
+  skip?: number;
+  limit?: number;
+}
+
 /**
  * A single operation in a bulk write: either a plain insert of a fully
  * built job, or an upsert by id with the same setOnInsert/set split as
@@ -54,7 +59,8 @@ export interface IStore {
     set: Partial<IJob>,
   ): Promise<IJob>;
   get(id: JobId): Promise<IJob | null>;
-  list(): Promise<IJob[]>;
+  list(options?: ListOptions): Promise<IJob[]>;
+  count(): Promise<number>;
   update(id: JobId, updates: Partial<IJob>): Promise<IJob | null>;
   remove(id: JobId): Promise<boolean>;
   removeAll(): Promise<number>;
