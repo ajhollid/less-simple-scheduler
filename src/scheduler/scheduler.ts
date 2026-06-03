@@ -2,8 +2,13 @@ import { EventEmitter } from "events";
 import { hostname } from "node:os";
 import { randomUUID } from "node:crypto";
 
-import type { IScheduler, SchedulerEvents, SchedulerOptions } from "./types.js";
-import { IStore } from "../store/types.js";
+import type {
+  AddJobInput,
+  IScheduler,
+  SchedulerEvents,
+  SchedulerOptions,
+} from "./types.js";
+import { BulkOp, BulkWriteResult, IStore } from "../store/types.js";
 import { IJob, JobId } from "../job/types.js";
 
 type Template = (data?: any) => void | Promise<void>;
@@ -152,7 +157,6 @@ export class Scheduler extends EventEmitter implements IScheduler {
       Math.floor(this.lockMs / 3), // heartbeat at least 3 times during the lock duration
     );
     this.heartbeatId = setInterval(() => {
-      this.emit("scheduler:heartbeat", this.workerId);
       this.heartbeatTick().catch((err) => this.emitSchedulerError(err));
     }, heartbeatEvery);
 
@@ -395,16 +399,11 @@ export class Scheduler extends EventEmitter implements IScheduler {
   // Job CRUD
   // ***********************************************
 
-  addJob = async (input: {
-    id?: JobId;
-    template: string;
-    startAt?: number;
-    repeat?: number;
-    data?: unknown;
-    active?: boolean;
-    jitter?: number | boolean;
-    upsert?: boolean;
-  }): Promise<IJob> => {
+  // ***********************************************
+  // Build a fully-formed IJob from user input: resolves timing,
+  // applies jitter, and fills in defaults. Shared by addJob/addJobs.
+  // ***********************************************
+  private buildJob(input: AddJobInput): IJob {
     // ***********************************************
     // 1.  Set up timing
     // ***********************************************
@@ -426,7 +425,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
     // ***********************************************
     // 2.  Create job
     // ***********************************************
-    const job: IJob = {
+    return {
       id: input.id ?? randomUUID(),
       template: input.template,
       data: input.data,
@@ -456,40 +455,80 @@ export class Scheduler extends EventEmitter implements IScheduler {
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  addJob = async (input: AddJobInput): Promise<IJob> => {
+    const job = this.buildJob(input);
 
     // ***********************************************
     // 3.  Upsert if requested, otherwise insert
     // ***********************************************
     if (input.upsert) {
-      const setOnInsert: Partial<IJob> = {
-        nextRunAt: job.nextRunAt,
-        lastFinishedAt: job.lastFinishedAt,
-        lastScheduledAt: job.lastScheduledAt,
-        lastResult: job.lastResult,
-        lastError: job.lastError,
-        lastStartedAt: job.lastStartedAt,
-        lastFailedAt: job.lastFailedAt,
-        lockedBy: job.lockedBy,
-        lockedUntil: job.lockedUntil,
-        lockedAt: job.lockedAt,
-        attempts: job.attempts,
-        runCount: job.runCount,
-        failCount: job.failCount,
-        createdAt: job.createdAt,
-      };
-      const set: Partial<IJob> = {
-        template: job.template,
-        data: job.data,
-        startAt: job.startAt,
-        repeat: job.repeat,
-        active: job.active,
-        maxAttempts: job.maxAttempts,
-        backoffMs: job.backoffMs,
-        updatedAt: job.updatedAt,
-      };
+      const { setOnInsert, set } = this.splitUpsertFields(job);
       return await this.store.upsert(job.id, setOnInsert, set);
     }
     return await this.store.insert(job);
+  };
+
+  // ***********************************************
+  // Split a built job into the upsert field sets: `setOnInsert` is the
+  // runtime state preserved on an existing job; `set` is the config
+  // (re)applied every time. Shared by addJob and addJobs.
+  // ***********************************************
+  private splitUpsertFields(job: IJob): {
+    setOnInsert: Partial<IJob>;
+    set: Partial<IJob>;
+  } {
+    const setOnInsert: Partial<IJob> = {
+      nextRunAt: job.nextRunAt,
+      lastFinishedAt: job.lastFinishedAt,
+      lastScheduledAt: job.lastScheduledAt,
+      lastResult: job.lastResult,
+      lastError: job.lastError,
+      lastStartedAt: job.lastStartedAt,
+      lastFailedAt: job.lastFailedAt,
+      lockedBy: job.lockedBy,
+      lockedUntil: job.lockedUntil,
+      lockedAt: job.lockedAt,
+      attempts: job.attempts,
+      runCount: job.runCount,
+      failCount: job.failCount,
+      createdAt: job.createdAt,
+    };
+    const set: Partial<IJob> = {
+      template: job.template,
+      data: job.data,
+      startAt: job.startAt,
+      repeat: job.repeat,
+      active: job.active,
+      maxAttempts: job.maxAttempts,
+      backoffMs: job.backoffMs,
+      updatedAt: job.updatedAt,
+    };
+    return { setOnInsert, set };
+  }
+
+  // ***********************************************
+  // Turn one input into a store-level bulk op, honouring its `upsert`
+  // flag exactly like addJob does.
+  // ***********************************************
+  private toBulkOp(input: AddJobInput): BulkOp {
+    const job = this.buildJob(input);
+    if (input.upsert) {
+      const { setOnInsert, set } = this.splitUpsertFields(job);
+      return { kind: "upsert", id: job.id, setOnInsert, set };
+    }
+    return { kind: "insert", job };
+  }
+
+  // ***********************************************
+  // Batch counterpart of addJob: builds every input and writes them in
+  // one unordered store round-trip. Each input honours its own `upsert`
+  // flag. Best-effort — valid ops land even if others fail; the result
+  // reports insert/update counts and any per-id failures.
+  // ***********************************************
+  addJobs = async (inputs: AddJobInput[]): Promise<BulkWriteResult> => {
+    return await this.store.bulkWrite(inputs.map((input) => this.toBulkOp(input)));
   };
 
   async pauseJob(id: JobId): Promise<boolean> {

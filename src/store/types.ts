@@ -1,12 +1,47 @@
 import type { IJob, JobId } from "../job/types.js";
 
+/**
+ * A single operation in a bulk write: either a plain insert of a fully
+ * built job, or an upsert by id with the same setOnInsert/set split as
+ * the single-job {@link IStore.upsert}.
+ */
+export type BulkOp =
+  | { kind: "insert"; job: IJob }
+  | {
+      kind: "upsert";
+      id: JobId;
+      setOnInsert: Partial<IJob>;
+      set: Partial<IJob>;
+    };
+
+export interface BulkFailure {
+  id: JobId;
+  error: string;
+}
+
+export interface BulkWriteResult {
+  /** Brand-new documents written (plain inserts + upserts that inserted). */
+  inserted: number;
+  /** Existing documents modified by an upsert. */
+  updated: number;
+  /** Ops that failed (e.g. duplicate id on a plain insert), keyed by id. */
+  failed: BulkFailure[];
+}
+
 export interface IStore {
-  // --- Lifecycle ---
+  // ### Lifecycle ###
   connect(): Promise<void>;
   disconnect(): Promise<void>;
 
   // ### CRUD ###
   insert(job: IJob): Promise<IJob>;
+
+  /**
+   * Best-effort bulk write. Ops run unordered: every valid op is applied
+   * even if others fail. Returns insert/update counts plus the ops that
+   * failed and why. Never rejects on per-op write errors
+   */
+  bulkWrite(ops: BulkOp[]): Promise<BulkWriteResult>;
   /**
    * Upsert a job by id. `set` fields are applied unconditionally;
    * `setOnInsert` fields are only applied when the document doesn't

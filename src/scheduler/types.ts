@@ -1,6 +1,17 @@
 import { EventEmitter } from "events";
 import { IJob, JobId } from "../job/types.js";
-import { IStore } from "../store/types.js";
+import { BulkWriteResult } from "../store/types.js";
+
+export interface AddJobInput {
+  id?: JobId;
+  template: string;
+  startAt?: number;
+  repeat?: number;
+  data?: unknown;
+  active?: boolean;
+  jitter?: number | boolean;
+  upsert?: boolean;
+}
 
 export interface IScheduler extends EventEmitter {
   emit<K extends keyof SchedulerEvents>(
@@ -34,25 +45,9 @@ export interface IScheduler extends EventEmitter {
   stop: () => Promise<boolean>;
   processJobs(): Promise<void>;
 
-  addJob: ({
-    id,
-    template,
-    startAt,
-    repeat,
-    data,
-    active,
-    jitter,
-    upsert,
-  }: {
-    id?: JobId;
-    template: string;
-    startAt?: number;
-    repeat?: number;
-    data?: unknown;
-    active?: boolean;
-    jitter?: number | boolean;
-    upsert?: boolean;
-  }) => Promise<IJob>;
+  addJob: (input: AddJobInput) => Promise<IJob>;
+
+  addJobs: (inputs: AddJobInput[]) => Promise<BulkWriteResult>;
 
   pauseJob(id: JobId): Promise<boolean>;
 

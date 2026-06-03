@@ -1,6 +1,12 @@
-import { MongoClient, type Collection, type Filter } from "mongodb";
+import {
+  MongoClient,
+  MongoBulkWriteError,
+  type AnyBulkWriteOperation,
+  type Collection,
+  type Filter,
+} from "mongodb";
 import type { IJob, JobId } from "../job/types.js";
-import type { IStore } from "./types.js";
+import type { BulkOp, BulkWriteResult, IStore } from "./types.js";
 
 export interface MongoStoreOptions {
   // ***********************************************
@@ -92,6 +98,64 @@ export class MongoStore implements IStore {
   async insert(job: IJob): Promise<IJob> {
     await this.requireCollection().insertOne(toMongo(job));
     return job;
+  }
+
+  async bulkWrite(ops: BulkOp[]): Promise<BulkWriteResult> {
+    if (ops.length === 0) return { inserted: 0, updated: 0, failed: [] };
+
+    // The op at index i maps 1:1 to writes[i], so writeError.index ties a
+    // failure straight back to ops[i] and thus its job id.
+    const writes: AnyBulkWriteOperation<MongoJob>[] = ops.map((op) =>
+      op.kind === "insert"
+        ? { insertOne: { document: toMongo(op.job) } }
+        : {
+            updateOne: {
+              filter: { _id: op.id },
+              update: {
+                $set: omitUndefined(stripId(op.set)),
+                $setOnInsert: omitUndefined(stripId(op.setOnInsert)),
+              },
+              upsert: true,
+            },
+          },
+    );
+    const idAt = (i: number): JobId => {
+      const op = ops[i];
+      return op.kind === "insert" ? op.job.id : op.id;
+    };
+
+    try {
+      // Unordered: a failing op (e.g. duplicate id) doesn't stop the rest.
+      const res = await this.requireCollection().bulkWrite(writes, {
+        ordered: false,
+      });
+      return {
+        inserted: res.insertedCount + res.upsertedCount,
+        updated: res.modifiedCount,
+        failed: [],
+      };
+    } catch (err) {
+      // Only per-op write errors are best-effort. Anything else
+      // (e.g. not connected) is a store-level failure — rethrow it.
+      if (!(err instanceof MongoBulkWriteError)) throw err;
+
+      const writeErrors = Array.isArray(err.writeErrors)
+        ? err.writeErrors
+        : [err.writeErrors];
+      const failed = writeErrors.map((we) => ({
+        id: idAt(we.index),
+        error: we.errmsg ?? String(we),
+      }));
+
+      // Successful ops in the same batch are still committed; their
+      // counts live on the error's partial result.
+      const r = err.result;
+      return {
+        inserted: (r.insertedCount ?? 0) + (r.upsertedCount ?? 0),
+        updated: r.modifiedCount ?? 0,
+        failed,
+      };
+    }
   }
 
   async upsert(
