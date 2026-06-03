@@ -157,6 +157,7 @@ export class Scheduler extends EventEmitter implements IScheduler {
       Math.floor(this.lockMs / 3), // heartbeat at least 3 times during the lock duration
     );
     this.heartbeatId = setInterval(() => {
+      this.emit("scheduler:heartbeat", this.workerId);
       this.heartbeatTick().catch((err) => this.emitSchedulerError(err));
     }, heartbeatEvery);
 
@@ -528,7 +529,9 @@ export class Scheduler extends EventEmitter implements IScheduler {
   // reports insert/update counts and any per-id failures.
   // ***********************************************
   addJobs = async (inputs: AddJobInput[]): Promise<BulkWriteResult> => {
-    return await this.store.bulkWrite(inputs.map((input) => this.toBulkOp(input)));
+    return await this.store.bulkWrite(
+      inputs.map((input) => this.toBulkOp(input)),
+    );
   };
 
   async pauseJob(id: JobId): Promise<boolean> {
