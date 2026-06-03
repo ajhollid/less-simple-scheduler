@@ -7,5 +7,10 @@ export type {
   SchedulerEvents,
   AddJobInput,
 } from "./scheduler/types.js";
-export type { IStore, ListOptions } from "./store/types.js";
+export type {
+  IStore,
+  ListOptions,
+  QueueStats,
+  JobFailure,
+} from "./store/types.js";
 export type { IJob, JobId, JobResult } from "./job/types.js";

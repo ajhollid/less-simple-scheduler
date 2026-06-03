@@ -33,6 +33,40 @@ export interface BulkWriteResult {
   failed: BulkFailure[];
 }
 
+/**
+ * A job that has failed at least once over its lifetime. `data` is the
+ * job's raw payload (untyped at the store level) so callers can derive
+ * their own domain fields from it.
+ */
+export interface JobFailure {
+  id: JobId;
+  data: unknown;
+  /** `lastFailedAt` — when the most recent failure was recorded. */
+  failedAt: number | null;
+  failCount: number;
+  /** `lastError` — message from the most recent failure. */
+  failReason: string | null;
+}
+
+/**
+ * Aggregate counters over the whole job collection, computed by the store
+ * in a single pass (no full document fetch). All counts are point-in-time.
+ */
+export interface QueueStats {
+  /** Total jobs in the collection. */
+  jobs: number;
+  /** Jobs currently held by a live lock (in flight on some worker). */
+  activeJobs: number;
+  /** Jobs whose most recent run failed (failCount > 0 and the last failure is at least as recent as the last completion). */
+  failingJobs: number;
+  /** Lifetime sum of successful runs across all jobs. */
+  totalRuns: number;
+  /** Lifetime sum of failures across all jobs. */
+  totalFailures: number;
+  /** Every job with at least one lifetime failure. */
+  jobsWithFailures: JobFailure[];
+}
+
 export interface IStore {
   // ### Lifecycle ###
   connect(): Promise<void>;
@@ -61,6 +95,7 @@ export interface IStore {
   get(id: JobId): Promise<IJob | null>;
   list(options?: ListOptions): Promise<IJob[]>;
   count(): Promise<number>;
+  getStats(): Promise<QueueStats>;
   update(id: JobId, updates: Partial<IJob>): Promise<IJob | null>;
   remove(id: JobId): Promise<boolean>;
   removeAll(): Promise<number>;

@@ -6,8 +6,13 @@ import {
   type Filter,
 } from "mongodb";
 import type { IJob, JobId } from "../job/types.js";
-import type { BulkOp, BulkWriteResult, IStore } from "./types.js";
-import type { ListOptions } from "./types.js";
+import type {
+  BulkOp,
+  BulkWriteResult,
+  IStore,
+  ListOptions,
+  QueueStats,
+} from "./types.js";
 export interface MongoStoreOptions {
   // ***********************************************
   // url is full connection string including DB name
@@ -194,6 +199,105 @@ export class MongoStore implements IStore {
 
   async count(): Promise<number> {
     return await this.requireCollection().countDocuments();
+  }
+
+  async getStats(): Promise<QueueStats> {
+    const now = Date.now();
+
+    const [result] = await this.requireCollection()
+      .aggregate<{
+        totals?: Array<Omit<QueueStats, "jobsWithFailures">>;
+        jobsWithFailures: Array<{
+          _id: JobId;
+          data: unknown;
+          failedAt: number | null;
+          failCount: number;
+          failReason: string | null;
+        }>;
+      }>([
+        {
+          $facet: {
+            totals: [
+              {
+                $group: {
+                  _id: null,
+                  jobs: { $sum: 1 },
+                  totalRuns: { $sum: { $ifNull: ["$runCount", 0] } },
+                  totalFailures: { $sum: { $ifNull: ["$failCount", 0] } },
+                  // A job held by a live lock is in flight on some worker.
+                  activeJobs: {
+                    $sum: {
+                      $cond: [
+                        {
+                          $and: [
+                            { $ne: ["$lockedBy", null] },
+                            { $gt: ["$lockedUntil", now] },
+                          ],
+                        },
+                        1,
+                        0,
+                      ],
+                    },
+                  },
+                  // Failing = has failed at least once AND that failure is at
+                  // least as recent as the last successful completion.
+                  failingJobs: {
+                    $sum: {
+                      $cond: [
+                        {
+                          $and: [
+                            { $gt: [{ $ifNull: ["$failCount", 0] }, 0] },
+                            {
+                              $gte: [
+                                { $ifNull: ["$lastFailedAt", 0] },
+                                { $ifNull: ["$lastFinishedAt", 0] },
+                              ],
+                            },
+                          ],
+                        },
+                        1,
+                        0,
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+            jobsWithFailures: [
+              { $match: { failCount: { $gt: 0 } } },
+              {
+                $project: {
+                  _id: 1,
+                  data: 1,
+                  failedAt: { $ifNull: ["$lastFailedAt", null] },
+                  failCount: 1,
+                  failReason: { $ifNull: ["$lastError", null] },
+                },
+              },
+            ],
+          },
+        },
+      ])
+      .toArray();
+
+    const totals = result?.totals?.[0] ?? {
+      jobs: 0,
+      activeJobs: 0,
+      failingJobs: 0,
+      totalRuns: 0,
+      totalFailures: 0,
+    };
+
+    return {
+      ...totals,
+      jobsWithFailures: (result?.jobsWithFailures ?? []).map((j) => ({
+        id: j._id,
+        data: j.data,
+        failedAt: j.failedAt,
+        failCount: j.failCount,
+        failReason: j.failReason,
+      })),
+    };
   }
 
   async update(id: JobId, updates: Partial<IJob>): Promise<IJob | null> {

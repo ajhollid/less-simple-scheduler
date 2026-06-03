@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import { IJob, JobId } from "../job/types.js";
-import { BulkWriteResult, ListOptions } from "../store/types.js";
+import { BulkWriteResult, ListOptions, QueueStats } from "../store/types.js";
 
 export interface AddJobInput {
   id?: JobId;
@@ -58,6 +58,8 @@ export interface IScheduler extends EventEmitter {
   getJobs(options?: ListOptions): Promise<IJob[]>;
 
   countJobs(): Promise<number>;
+
+  getStats(): Promise<QueueStats>;
 
   removeJob(id: JobId): Promise<boolean>;
 
